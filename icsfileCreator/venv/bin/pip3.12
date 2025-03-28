@@ -1,4 +1,4 @@
-#!/Users/sunwoo/Desktop/dev/kt-2ndproj/venv/bin/python
+#!/Users/sunwoo/Desktop/dev/kt-alpb-2ndproj/icsfileCreator/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys

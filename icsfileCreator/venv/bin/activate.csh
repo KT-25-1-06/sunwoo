@@ -9,7 +9,7 @@ alias deactivate 'test $?_OLD_VIRTUAL_PATH != 0 && setenv PATH "$_OLD_VIRTUAL_PA
 # Unset irrelevant variables.
 deactivate nondestructive
 
-setenv VIRTUAL_ENV "/Users/sunwoo/Desktop/dev/kt-2ndproj/venv"
+setenv VIRTUAL_ENV "/Users/sunwoo/Desktop/dev/kt-alpb-2ndproj/icsfileCreator/venv"
 
 set _OLD_VIRTUAL_PATH="$PATH"
 setenv PATH "$VIRTUAL_ENV/bin:$PATH"

@@ -1,0 +1,22 @@
+{
+  "events": [
+    {
+      "summary": "회의",
+      "date": "2025-04-01",
+      "start_time": "10:00",
+      "end_time": "11:00",
+      "location": "회의실 A",
+      "description": "주간 회의",
+      "attendees": ["user@example.com", "admin@example.com"]
+    },
+    {
+      "summary": "워크숍",
+      "date": "2025-04-02",
+      "start_time": "13:00",
+      "end_time": "17:00",
+      "location": "강당",
+      "description": "분기별 워크숍",
+      "attendees": ["leader@example.com"]
+    }
+  ]
+}

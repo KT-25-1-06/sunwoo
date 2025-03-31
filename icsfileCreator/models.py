@@ -1,14 +1,15 @@
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import date
 
-class EventItem(BaseModel):
-    title: str
-    start: datetime
-    end: datetime
+class ScheduleEvent(BaseModel):
+    summary: str
+    date: date
+    start_time: str  # "HH:MM" 형식
+    end_time: str    # "HH:MM" 형식
     location: Optional[str] = None
     description: Optional[str] = None
-    alarm_minutes_before: Optional[int] = None
+    attendees: Optional[List[str]] = []
 
-class Schedule(BaseModel):
-    events: List[EventItem]
+class ScheduleRequest(BaseModel):
+    events: List[ScheduleEvent]

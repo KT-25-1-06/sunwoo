@@ -2,6 +2,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, DateTime, LargeBinary, ForeignKey, Boolean
 from datetime import datetime
 
+
+
 Base = declarative_base()
 
 class ScheduleAnalysis(Base):
@@ -30,3 +32,4 @@ class ICSFileBinary(Base):
     filename = Column(String)
     fileData = Column(LargeBinary)
     createdAt = Column(DateTime, default=datetime.utcnow)
+

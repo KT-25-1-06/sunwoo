@@ -4,11 +4,16 @@ from datetime import datetime
 
 class ScheduleEvent(BaseModel):
     scheduleId: int
-    title: str
+    title: str 
     description: str
     location: str
     startAt: datetime
     endAt: datetime
+
+    # class Config:
+    #     json_encoders = {
+    #         datetime: lambda dt: dt.isoformat()
+    #     }
 
 class CalendarSubscriptionCreatedEvent(BaseModel):
     calendarId: int

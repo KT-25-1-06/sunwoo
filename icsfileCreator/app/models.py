@@ -26,8 +26,8 @@ class ICSFileBinary(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     isGroupSchedule = Column(Boolean, default=False)
-    calendarId = Column(String, nullable=True)
-    groupId = Column(String, nullable=True)
+    calendarId = Column(Integer, nullable=True)
+    groupId = Column(Integer, nullable=True)
     scheduleId = Column(Integer, ForeignKey("schedule_analysis.id"))
     filename = Column(String)
     fileData = Column(LargeBinary)

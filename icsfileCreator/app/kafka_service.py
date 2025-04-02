@@ -46,7 +46,7 @@ class KafkaService:
 
     async def produce_calendar_ics_created(self, event: CalendarIcsCreatedEvent):
         await self.producer.send_and_wait(
-            settings.TOPIC_CALENDAR_ICS_CREATED, event.dict()
+            settings.TOPIC_CALENDAR_ICS_CREATED, json.dumps(event.dict())
         ) 
 
     async def consume_events(self, handler):

@@ -1,5 +1,7 @@
 import asyncio
 import os
+import json
+from app.events import CalendarSubscriptionCreatedEvent, CalendarIcsCreatedEvent, CalendarSubscriptionDeletedEvent, ScheduleEvent
 from datetime import datetime
 
 from fastapi import (Body, Depends, FastAPI, HTTPException, Path, Query, Response)
@@ -13,6 +15,8 @@ from app.events import (CalendarIcsCreatedEvent,
                         CalendarSubscriptionDeletedEvent)
 from app.models import Base, ICSFileBinary, ScheduleAnalysis
 from app.kafka_service import kafka_service
+
+from settings import settings
 
 Base.metadata.create_all(bind=engine)
 
@@ -29,7 +33,7 @@ def get_db():
         db.close()
 
 ## 단일 조회
-@app.get("/api/v1/ics/single/{schedule_id}")
+@app.get("/ics/single/{schedule_id}")
 def get_single_schedule_ics(schedule_id: int = Path(...), db: Session = Depends(get_db)):
     ics_file = db.query(ICSFileBinary).filter(
         ICSFileBinary.scheduleId == schedule_id,
@@ -46,7 +50,7 @@ def get_single_schedule_ics(schedule_id: int = Path(...), db: Session = Depends(
     }
 
 ## 그룹 조회
-@app.get("/api/v1/ics/group")
+@app.get("/ics/group")
 def get_group_schedule_ics(
     calendar_id: str = Query(...),
     group_id: str = Query(...),
@@ -68,8 +72,9 @@ def get_group_schedule_ics(
     }
 
 ## calendarId 기반 최신 ICS 반환 (구독 URL)
-@app.get("/calendar/{calendar_id}.ics")
+@app.get("/ics/{calendar_id}.ics")
 def download_calendar_ics(calendar_id: str = Path(...), db: Session = Depends(get_db)):
+    print(f"🔍 calendar_id: {calendar_id}")
     ics_file = db.query(ICSFileBinary).filter(
         ICSFileBinary.calendarId == calendar_id,
         ICSFileBinary.isGroupSchedule == True
@@ -87,7 +92,7 @@ def download_calendar_ics(calendar_id: str = Path(...), db: Session = Depends(ge
     )
 
 ## ics파일 생성
-@app.post("/api/v1/ics")
+@app.post("/ics")
 def create_ics_file(
     is_group: bool = Query(False),
     schedule_id: int = Query(None),
@@ -145,7 +150,7 @@ def create_ics_file(
     }
 
 ## ICS 파일 수정
-@app.put("/api/v1/ics/{ics_id}")
+@app.put("/ics/{ics_id}")
 def update_ics_file(
     ics_id: int = Path(...),
     payload: dict = Body(...),
@@ -165,7 +170,7 @@ def update_ics_file(
     return {"message": "ICS 파일이 수정되었습니다.", "ics_file_id": file_entry.id}
 
 ## ICS 파일 삭제
-@app.delete("/api/v1/ics/{ics_id}")
+@app.delete("/ics/{ics_id}")
 def delete_ics_file(ics_id: int = Path(...), db: Session = Depends(get_db)):
     file_entry = db.query(ICSFileBinary).filter(ICSFileBinary.id == ics_id).first()
     if not file_entry:
@@ -177,7 +182,7 @@ def delete_ics_file(ics_id: int = Path(...), db: Session = Depends(get_db)):
     return {"message": "ICS 파일이 삭제되었습니다."}
 
 ## ICS 파일 다운로드
-@app.get("/api/v1/ics/download-ics/")
+@app.get("/ics/download-ics/")
 def download_ics(ics_file_id: int, db: Session = Depends(get_db)):
     file_entry = db.query(ICSFileBinary).filter(ICSFileBinary.id == ics_file_id).first()
 
@@ -203,35 +208,51 @@ async def startup():
 async def shutdown():
     await kafka_service.stop()
 
-async def handle_kafka_message(topic: str, payload: dict):
+async def handle_kafka_message(topic: str, payload: str):
     print(f"📩 Kafka Received: topic={topic}, data={payload}")
+    try:
+        data = json.loads(payload)
+    except Exception as e:
+        print(f"❌ JSON 디코딩 실패: {e}")
+        return
 
     if topic == "calendar.ics.requested":
-        event = CalendarSubscriptionCreatedEvent(**payload)
-        print(f"➡️ 처리할 캘린더 ID: {event.calendarId}, 일정 수: {len(event.schedules)}")
-
-        db = SessionLocal()
         try:
-            ics_file = db.query(ICSFileBinary).filter(
-                ICSFileBinary.calendarId == event.calendarId,
-                ICSFileBinary.isGroupSchedule == True
-            ).order_by(ICSFileBinary.createdAt.desc()).first()
+            event = CalendarSubscriptionCreatedEvent(**data)
 
-            if not ics_file:
-                print(f"❌ calendarId={event.calendarId} 에 해당하는 ICS 파일이 존재하지 않습니다.")
-                return
+            print(f"➡️ 처리할 캘린더 ID: {event.calendarId}, 일정 수: {len(event.schedules)}")
 
-            subscription_url = f"https://your-domain.com/calendar/{event.calendarId}.ics"
+            db = SessionLocal()
+            try:
+                ics_file = db.query(ICSFileBinary).filter(
+                    ICSFileBinary.calendarId == event.calendarId,
+                    ICSFileBinary.isGroupSchedule == True
+                ).order_by(ICSFileBinary.createdAt.desc()).first()
 
-            await kafka_service.produce_calendar_ics_created(
-                CalendarIcsCreatedEvent(calendarId=event.calendarId, subscriptionUrl=subscription_url)
-            )
-            print(f"✅ ICS 파일 생성 완료 이벤트 전송: {subscription_url}")
+                if ics_file:
+                    update_ics_file(ics_id=ics_file.id, payload=data, db=db)
+                else:
+                    create_ics_file(is_group=True, calendar_id=event.calendarId, group_id=event.calendarId, db=db)
 
-        finally:
-            db.close()
+                subscription_url = f"{settings.ICS_FILE_SERVICE_URL}/ics/{event.calendarId}.ics"
+
+                await kafka_service.produce_calendar_ics_created(
+                    CalendarIcsCreatedEvent(calendarId=event.calendarId, subscriptionUrl=subscription_url)
+                )
+                print(f"✅ ICS 파일 생성 완료 이벤트 전송: {subscription_url}")
+
+            finally:
+                db.close()
+
+        except Exception as e:
+            import traceback
+            print(f"❌ CalendarSubscriptionCreatedEvent 처리 중 오류: {e}")
+            traceback.print_exc()
 
     elif topic == "calendar.ics.delete.requested":
-        event = CalendarSubscriptionDeletedEvent(**payload)
-        print(f"🗑️ ICS 삭제 요청: calendarId = {event.calendarId}")
-        # TODO: 삭제 로직 처리
+        try:
+            event = CalendarSubscriptionDeletedEvent(**data)
+            print(f"🗑️ ICS 삭제 요청: calendarId = {event.calendarId}")
+            # TODO: 삭제 로직 처리
+        except Exception as e:
+            print(f"❌ CalendarSubscriptionDeletedEvent 처리 중 오류: {e}")

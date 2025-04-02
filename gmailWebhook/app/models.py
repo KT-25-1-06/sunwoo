@@ -1,8 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-
+from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 
 class Email(Base):
@@ -36,7 +35,7 @@ class ICSFileBinary(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     isGroupSchedule = Column(Boolean, default=False)
-    calendarId = Column(Integer)
+    calendarId = Column(Integer, nullable=True)
     groupId = Column(Integer, nullable=True)
     scheduleId = Column(Integer, nullable=True)
     filename = Column(String)

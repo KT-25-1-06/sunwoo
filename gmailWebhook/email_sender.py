@@ -26,10 +26,13 @@ def send_ics_email_binary(to_email: str, subject: str, message: str, ics_bytes: 
         part.add_header("Content-Disposition", f"attachment; filename={filename}")
         part.add_header("Content-Type", "text/calendar; method=REQUEST")
         msg.attach(part)
+        print(f"msg: {msg}")
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(GMAIL_ADDRESS, GMAIL_PASSWORD)
             server.send_message(msg)
+
+        print(f"email sent")
 
         return JSONResponse(content={"message": "이메일 전송 완료 (요약 포함)"}, status_code=200)
 

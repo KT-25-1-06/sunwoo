@@ -1,22 +1,20 @@
-import asyncio
+from icalendar import Calendar, Event
+import asyncio, sys
 from contextlib import asynccontextmanager
-
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import Depends, FastAPI, Form, Path, Query, Body
+from fastapi import Depends, FastAPI, Form, Path, Query, Body, HTTPException, Response
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
-from app.models import ICSFileBinary, CleanedEmail, ScheduleAnalysis
+from app.database import SessionLocal, engine
+from app.models import ICSFileBinary, CleanedEmail, ScheduleAnalysis, Base
 from app.scheduler import check_gmail
 from email_reader import get_ics_summary
 from email_sender import send_ics_email_binary
 
 from app.kafka_service import kafka_service
 from app.events import EmailAnalysisResultEvent, ScheduleCreateEvent, CalendarSubscriptionCreatedEvent, CalendarSubscriptionDeletedEvent, CalendarIcsCreatedEvent
-from datetime import datetime
+from datetime import datetime, timezone
 from settings import settings
-
-from app.database import engine, Base
 
 Base.metadata.create_all(bind=engine)
 
@@ -112,13 +110,14 @@ def create_ics_file(
 
     schedule = None
     if not is_group:
-        schedule = db.query(ScheduleAnalysis).filter(
-            ScheduleAnalysis.id == schedule_id,
-            ScheduleAnalysis.status == "success"
-        ).first()
+        if schedule_id != -1:
+            schedule = db.query(ScheduleAnalysis).filter(
+                ScheduleAnalysis.id == schedule_id,
+                ScheduleAnalysis.status == "success"
+            ).first()
 
-        if not schedule:
-            raise HTTPException(status_code=404, detail="일정을 찾을 수 없습니다.")
+            if not schedule:
+                raise HTTPException(status_code=404, detail="일정을 찾을 수 없습니다.")
 
     cal = Calendar()
     cal.add("prodid", "-//KT Auto Scheduler//")
@@ -259,7 +258,7 @@ def send_from_db(
         return {"error": "해당 파일이 존재하지 않습니다."}
 
     summary = get_ics_summary(file_id, db)
-    # TODO: Replace with Kafka message publish to trigger email sending
+    print(f"summary: {summary}")
     return send_ics_email_binary(to_email, subject, message, ics.fileData, summary, ics.filename)
 
 async def handle_kafka_message(topic: str, payload: dict):
@@ -292,18 +291,6 @@ async def handle_kafka_message(topic: str, payload: dict):
                         # 문자열 날짜를 datetime 객체로 변환
                         start_at = datetime.fromisoformat(event.parsedStartAt)
                         end_at = datetime.fromisoformat(event.parsedEndAt)
-                        
-                        analysis = ScheduleAnalysis(
-                            email_id=event.email_id,
-                            parsed_title=event.parsedTitle,
-                            parsed_start_at=start_at,
-                            parsed_end_at=end_at,
-                            parsed_location=event.parsedLocation,
-                            created_at=datetime.now()
-                        )
-                        db.add(analysis)
-                        db.commit()
-                        print(f"✅ 이메일 분석 결과 저장 완료: email_id={event.email_id}")
 
                         event = ScheduleCreateEvent(
                             email_id=event.email_id,
@@ -315,9 +302,13 @@ async def handle_kafka_message(topic: str, payload: dict):
                         )
                         
                         # ics file create
-                        result = create_ics_file(is_group=False, schedule_id=0, db=db)
+                        result = create_ics_file(is_group=False, schedule_id=-1, calendar_id=-1, group_id=-1, db=db)
 
-                        send_from_db(file_id=result["ics_file_id"], to_email=email.to, subject=event.parsedTitle, message=email.body, db=db)
+                        print(f"🔄 ics file create: {result}")
+
+                        send_from_db(file_id=result["ics_file_id"], to_email=email.sender_email, subject=event.title, message=email.body, db=db)
+
+                        print(f"🔄 ics file send: {result}")
 
                     except Exception as e:
                         print(f"❌ 이메일 분석 결과 저장 실패: {str(e)}")

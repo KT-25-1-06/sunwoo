@@ -67,6 +67,25 @@ def get_group_schedule_ics(
         "createdAt": ics_file.createdAt,
     }
 
+## calendarId 기반 최신 ICS 반환 (구독 URL)
+@app.get("/calendar/{calendar_id}.ics")
+def download_calendar_ics(calendar_id: str = Path(...), db: Session = Depends(get_db)):
+    ics_file = db.query(ICSFileBinary).filter(
+        ICSFileBinary.calendarId == calendar_id,
+        ICSFileBinary.isGroupSchedule == True
+    ).order_by(ICSFileBinary.createdAt.desc()).first()
+
+    if not ics_file:
+        raise HTTPException(status_code=404, detail="calendarId에 해당하는 ICS 파일이 존재하지 않습니다.")
+
+    return Response(
+        content=ics_file.fileData,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": f"attachment; filename={ics_file.filename}"
+        }
+    )
+
 ## ics파일 생성
 @app.post("/api/v1/ics")
 def create_ics_file(
@@ -136,7 +155,6 @@ def update_ics_file(
     if not file_entry:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
-    # JSON으로 받은 key-value 쌍을 모두 반영
     for key, value in payload.items():
         if hasattr(file_entry, key):
             setattr(file_entry, key, value)
@@ -192,15 +210,28 @@ async def handle_kafka_message(topic: str, payload: dict):
         event = CalendarSubscriptionCreatedEvent(**payload)
         print(f"➡️ 처리할 캘린더 ID: {event.calendarId}, 일정 수: {len(event.schedules)}")
 
-        # ICS 파일 생성 로직 수행 후
-        subscription_url = f"https://icsfiles.yourdomain.com/cal/{event.calendarId}.ics"
+        db = SessionLocal()
+        try:
+            ics_file = db.query(ICSFileBinary).filter(
+                ICSFileBinary.calendarId == event.calendarId,
+                ICSFileBinary.isGroupSchedule == True
+            ).order_by(ICSFileBinary.createdAt.desc()).first()
 
-        await kafka_service.produce_calendar_ics_created(
-            CalendarIcsCreatedEvent(calendarId=event.calendarId, subscriptionUrl=subscription_url)
-        )
-        print(f"✅ ICS 파일 생성 완료 이벤트 전송: {subscription_url}")
+            if not ics_file:
+                print(f"❌ calendarId={event.calendarId} 에 해당하는 ICS 파일이 존재하지 않습니다.")
+                return
+
+            subscription_url = f"https://your-domain.com/calendar/{event.calendarId}.ics"
+
+            await kafka_service.produce_calendar_ics_created(
+                CalendarIcsCreatedEvent(calendarId=event.calendarId, subscriptionUrl=subscription_url)
+            )
+            print(f"✅ ICS 파일 생성 완료 이벤트 전송: {subscription_url}")
+
+        finally:
+            db.close()
 
     elif topic == "calendar.ics.delete.requested":
         event = CalendarSubscriptionDeletedEvent(**payload)
         print(f"🗑️ ICS 삭제 요청: calendarId = {event.calendarId}")
-        # 삭제 로직 수행
+        # TODO: 삭제 로직 처리

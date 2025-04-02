@@ -2,7 +2,7 @@ import asyncio
 import json
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from events import (CalendarIcsCreatedEvent, CalendarSubscriptionCreatedEvent,
+from app.events import (CalendarIcsCreatedEvent, CalendarSubscriptionCreatedEvent,
                     CalendarSubscriptionDeletedEvent)
 
 from settings import settings

@@ -21,7 +21,7 @@ def parse_schedule_from_cleaned_email(email_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="Cleaned email not found")
 
     try:
-        print("💬 이메일 본문:", cleaned_email.body)
+        print("이메일 본문:", cleaned_email.body)
         if not cleaned_email.body:
             raise HTTPException(status_code=400, detail="Email body is empty")
         
@@ -42,6 +42,7 @@ def parse_schedule_from_cleaned_email(email_id: int, db: Session = Depends(get_d
             failureReason=str(e)
         )
 
+    # TODO: Publish parsed schedule info (or schedule_id) to Kafka topic for ICS generation
     db.add(new_entry)
     db.commit()
     db.refresh(new_entry)

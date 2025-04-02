@@ -48,4 +48,5 @@ def send_from_db(
         return {"error": "해당 파일이 존재하지 않습니다."}
 
     summary = get_ics_summary(file_id, db)
+    # TODO: Replace with Kafka message publish to trigger email sending
     return send_ics_email_binary(to_email, subject, message, ics.fileData, summary, ics.filename)

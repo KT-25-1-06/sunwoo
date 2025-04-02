@@ -1,5 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, DateTime, LargeBinary, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, LargeBinary, ForeignKey, Boolean
 from datetime import datetime
 
 Base = declarative_base()
@@ -23,6 +23,9 @@ class ICSFileBinary(Base):
     __tablename__ = "ics_files_binary"
 
     id = Column(Integer, primary_key=True, index=True)
+    isGroupSchedule = Column(Boolean, default=False)
+    calendarId = Column(String, nullable=True)
+    groupId = Column(String, nullable=True)
     scheduleId = Column(Integer, ForeignKey("schedule_analysis.id"))
     filename = Column(String)
     fileData = Column(LargeBinary)

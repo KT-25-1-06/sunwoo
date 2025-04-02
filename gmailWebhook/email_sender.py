@@ -11,6 +11,7 @@ load_dotenv()
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 
+## TODO: Replace this direct SMTP send logic with Kafka publisher to email-sending service
 def send_ics_email_binary(to_email: str, subject: str, message: str, ics_bytes: bytes, summary: str, filename: str):
     try:
         msg = MIMEMultipart("mixed")

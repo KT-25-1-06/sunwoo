@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, Boolean
+from sqlalchemy.ext.declarative import declarative_base
 
-from app.database import Base
-
+Base = declarative_base()
 
 class Email(Base):
     __tablename__ = "emails"
@@ -35,7 +35,10 @@ class ICSFileBinary(Base):
     __tablename__ = "ics_files_binary"
 
     id = Column(Integer, primary_key=True, index=True)
-    scheduleId = Column(Integer)
+    isGroupSchedule = Column(Boolean, default=False)
+    calendarId = Column(Integer)
+    groupId = Column(Integer, nullable=True)
+    scheduleId = Column(Integer, nullable=True)
     filename = Column(String)
     fileData = Column(LargeBinary)
     createdAt = Column(DateTime, default=datetime.utcnow)
@@ -44,10 +47,14 @@ class ScheduleAnalysis(Base):
     __tablename__ = "schedule_analysis"
 
     id = Column(Integer, primary_key=True, index=True)
+    userId = Column(String)
     email_id = Column(Integer)
+    email_content = Column(Text)
     parsed_title = Column(String(512))
-    parsed_start_time = Column(DateTime)
-    parsed_end_time = Column(DateTime)
+    parsed_start_at = Column(DateTime)
+    parsed_end_at = Column(DateTime)
+    status = Column(String(50))
+    failure_reason = Column(String(512), nullable=True)
     parsed_location = Column(String(512))
     parsed_description = Column(Text, nullable=True)
     parsed_attendees = Column(Text, nullable=True)  # JSON 문자열로 저장

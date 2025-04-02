@@ -12,12 +12,11 @@ from email_reader import get_ics_summary
 from email_sender import send_ics_email_binary
 
 from app.kafka_service import kafka_service
-from app.events import EmailAnalysisResultEvent
+from app.events import EmailAnalysisResultEvent, ScheduleCreateEvent
 from datetime import datetime
 from settings import settings
 
 from app.database import engine, Base
-from app.models import Email, CleanedEmail, ICSFileBinary, ScheduleAnalysis
 
 Base.metadata.create_all(bind=engine)
 
@@ -138,6 +137,18 @@ async def handle_kafka_message(topic: str, payload: dict):
                         db.add(analysis)
                         db.commit()
                         print(f"✅ 이메일 분석 결과 저장 완료: email_id={event.email_id}")
+
+                        event = ScheduleCreateEvent(
+                            email_id=event.email_id,
+                            title=event.parsedTitle,
+                            description=email.body,
+                            start_at=event.parsedStartAt,
+                            end_at=event.parsedEndAt,
+                            location=event.parsedLocation,
+                        )
+                        await kafka_service.produce_schedule_create(event)
+                        print(f"✅ 일정 생성 요청 발행 완료: email_id={event.email_id}")
+
                     except Exception as e:
                         print(f"❌ 이메일 분석 결과 저장 실패: {str(e)}")
                         db.rollback()

@@ -29,6 +29,7 @@ class KafkaService:
         self.consumer = AIOKafkaConsumer(
             settings.TOPIC_CALENDAR_ICS_CREATE,
             settings.TOPIC_CALENDAR_ICS_DELETE,
+            settings.TOPIC_SCHEDULE_CREATE,
             loop=self.loop,
             bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
             group_id="icsfile-service",

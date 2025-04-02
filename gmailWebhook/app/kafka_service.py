@@ -68,9 +68,9 @@ class KafkaService:
         try:
             await self.producer.send_and_wait(
                 settings.TOPIC_SCHEDULE_CREATE,
-                event.model_dump_json().encode('utf-8')
+                event.dict()
             )
-            logger.info(f"일정 생성 이벤트 발행 완료: {event.model_dump_json()}")
+            logger.info(f"일정 생성 이벤트 발행 완료: {event.dict()}")
         except Exception as e:
             logger.error(f"일정 생성 이벤트 발행 실패: {str(e)}")
             raise

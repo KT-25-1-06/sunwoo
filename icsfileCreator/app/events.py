@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -26,3 +26,13 @@ class CalendarSubscriptionDeletedEvent(BaseModel):
 class CalendarIcsCreatedEvent(BaseModel):
     calendarId: int
     subscriptionUrl: str
+
+class ScheduleCreateEvent(BaseModel):
+    email_id: int
+    title: str
+    description: Optional[str] = None
+    start_at: str
+    end_at: str
+    location: Optional[str] = None
+    status: str = "UPCOMING"
+    repeat_type: str = "NONE"

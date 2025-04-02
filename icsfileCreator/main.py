@@ -1,7 +1,6 @@
 import asyncio
 import os
 import json
-from app.events import CalendarSubscriptionCreatedEvent, CalendarIcsCreatedEvent, CalendarSubscriptionDeletedEvent, ScheduleEvent
 from datetime import datetime
 
 from fastapi import (Body, Depends, FastAPI, HTTPException, Path, Query, Response)
@@ -12,7 +11,8 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine
 from app.events import (CalendarIcsCreatedEvent,
                         CalendarSubscriptionCreatedEvent,
-                        CalendarSubscriptionDeletedEvent)
+                        CalendarSubscriptionDeletedEvent,
+                        ScheduleCreateEvent)
 from app.models import Base, ICSFileBinary, ScheduleAnalysis
 from app.kafka_service import kafka_service
 
@@ -256,3 +256,18 @@ async def handle_kafka_message(topic: str, payload: str):
             # TODO: 삭제 로직 처리
         except Exception as e:
             print(f"❌ CalendarSubscriptionDeletedEvent 처리 중 오류: {e}")
+    
+    elif topic == "schedule.create":
+        try:
+            event = ScheduleCreateEvent(**data)
+            print(f"🔄 일정 생성 요청 수신: {event.dict()}")
+
+            create_ics_file(is_group=True, calendar_id=0, group_id=0, db=db)
+
+            # send ics file created event
+            await kafka_service.produce_calendar_ics_created(
+                
+            )
+        except Exception as e:
+            print(f"❌ ScheduleCreateEvent 처리 중 오류: {e}")
+        

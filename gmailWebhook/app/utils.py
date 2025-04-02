@@ -26,3 +26,5 @@ def save_cleaned_email_to_db(db, subject, sender_name, sender_email, to, cc, bod
     )
     db.add(email)
     db.commit()
+    db.refresh(email)
+    return email

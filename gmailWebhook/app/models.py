@@ -39,3 +39,17 @@ class ICSFileBinary(Base):
     filename = Column(String)
     fileData = Column(LargeBinary)
     createdAt = Column(DateTime, default=datetime.utcnow)
+
+class ScheduleAnalysis(Base):
+    __tablename__ = "schedule_analysis"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email_id = Column(Integer)
+    parsed_title = Column(String(512))
+    parsed_start_time = Column(DateTime)
+    parsed_end_time = Column(DateTime)
+    parsed_location = Column(String(512))
+    parsed_description = Column(Text, nullable=True)
+    parsed_attendees = Column(Text, nullable=True)  # JSON 문자열로 저장
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

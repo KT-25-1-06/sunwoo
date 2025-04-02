@@ -4,15 +4,54 @@ import email
 from email.header import decode_header
 from email.utils import parseaddr
 import re
+import asyncio
+from aiokafka import AIOKafkaProducer
+import json
 
 from app.database import SessionLocal
 from app.utils import save_email_to_db, save_cleaned_email_to_db
+from app.events import EmailAnalysisRequestEvent
 
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 
 def remove_angle_brackets(s):
     return re.sub(r"[<>]", "", s or "")
+
+async def send_email_to_analysis(email_id, subject, body, sender_name, sender_email, to, cc, date):
+    # Kafka 프로듀서 생성
+    producer = AIOKafkaProducer(
+        bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
+        security_protocol=os.getenv("KAFKA_SECURITY_PROTOCOL"),
+        sasl_mechanism=os.getenv("KAFKA_SASL_MECHANISM"),
+        sasl_plain_username=os.getenv("KAFKA_SASL_USERNAME"),
+        sasl_plain_password=os.getenv("KAFKA_SASL_PASSWORD"),
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    )
+    
+    # 프로듀서 시작
+    await producer.start()
+    
+    try:
+        # 이메일 분석 요청 이벤트 생성
+        event = EmailAnalysisRequestEvent(
+            email_id=email_id,
+            subject=subject,
+            body=body,
+            sender_name=sender_name,
+            sender_email=sender_email,
+            to=to,
+            cc=cc,
+            date=date
+        )
+        
+        # 이메일 분석 요청 발행
+        print(f"📤 이메일 분석 요청 발행: email_id={email_id}")
+        await producer.send_and_wait("email.analysis.request", event.dict())
+        print(f"✅ 이메일 분석 요청 발행 완료: email_id={email_id}")
+    finally:
+        # 프로듀서 중지
+        await producer.stop()
 
 def check_gmail():
     db = SessionLocal()
@@ -57,7 +96,7 @@ def check_gmail():
                 body = msg.get_payload(decode=True).decode(errors="ignore")
 
             # 원본 저장
-            save_email_to_db(
+            email_record = save_email_to_db(
                 db=db,
                 subject=subject,
                 sender=msg.get("From"),
@@ -67,7 +106,7 @@ def check_gmail():
             )
 
             # 정제본 저장
-            save_cleaned_email_to_db(
+            cleaned_email_record = save_cleaned_email_to_db(
                 db=db,
                 subject=subject,
                 sender_name=sender_name,
@@ -77,6 +116,18 @@ def check_gmail():
                 body=body,
                 date=msg.get("Date")
             )
+
+            # 이메일 분석 요청 발행
+            asyncio.run(send_email_to_analysis(
+                email_id=cleaned_email_record.id,
+                subject=subject,
+                body=body,
+                sender_name=sender_name,
+                sender_email=sender_email,
+                to=to_clean,
+                cc=cc_clean,
+                date=msg.get("Date")
+            ))
 
         print("✅ 새 메일 DB 저장 완료")
         mail.logout()

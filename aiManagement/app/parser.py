@@ -20,6 +20,10 @@ def parse_schedule(content: str) -> dict:
     print("🔍 GPT 응답:", completion)
 
     try:
-        return json.loads(completion.choices[0].message.content)
+        # GPT 응답에서 JSON 부분만 추출
+        content = completion.choices[0].message.content
+        # ```json과 ``` 제거
+        content = content.replace("```json", "").replace("```", "").strip()
+        return json.loads(content)
     except Exception as e:
         raise ValueError(f"GPT 응답이 JSON이 아님: {completion}") from e

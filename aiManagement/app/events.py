@@ -1,6 +1,5 @@
-from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+from typing import Optional
 
 class EmailAnalysisRequestEvent(BaseModel):
     email_id: int
@@ -19,4 +18,4 @@ class EmailAnalysisResultEvent(BaseModel):
     parsedEndAt: str
     parsedLocation: str
     status: str
-    failureReason: Optional[str] = None
+    failureReason: Optional[str] = None 

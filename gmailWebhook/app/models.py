@@ -45,16 +45,16 @@ class ICSFileBinary(Base):
 class ScheduleAnalysis(Base):
     __tablename__ = "schedule_analysis"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     userId = Column(String)
     email_id = Column(Integer)
     email_content = Column(Text)
-    parsed_title = Column(String(512))
-    parsed_start_at = Column(DateTime)
-    parsed_end_at = Column(DateTime)
+    parsed_title = Column(String(512), nullable=True)
+    parsed_start_at = Column(DateTime, nullable=True)
+    parsed_end_at = Column(DateTime, nullable=True)
     status = Column(String(50))
     failure_reason = Column(String(512), nullable=True)
-    parsed_location = Column(String(512))
+    parsed_location = Column(String(512), nullable=True)
     parsed_description = Column(Text, nullable=True)
     parsed_attendees = Column(Text, nullable=True)  # JSON 문자열로 저장
     created_at = Column(DateTime, default=datetime.utcnow)

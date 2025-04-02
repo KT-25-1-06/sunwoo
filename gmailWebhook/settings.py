@@ -18,5 +18,5 @@ class Settings:
     TOPIC_CALENDAR_ICS_DELETE = os.getenv("TOPIC_CALENDAR_ICS_DELETE")
     TOPIC_CALENDAR_ICS_CREATED = os.getenv("TOPIC_CALENDAR_ICS_CREATED")
 
-
+    ICS_FILE_SERVICE_URL = os.getenv("ICS_FILE_SERVICE_URL")
 settings = Settings()

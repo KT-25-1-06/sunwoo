@@ -1,3 +1,4 @@
+import json
 from icalendar import Calendar, Event
 import asyncio, sys
 from contextlib import asynccontextmanager
@@ -13,7 +14,7 @@ from email_sender import send_ics_email_binary
 
 from app.kafka_service import kafka_service
 from app.events import EmailAnalysisResultEvent, ScheduleCreateEvent, CalendarSubscriptionCreatedEvent, CalendarSubscriptionDeletedEvent, CalendarIcsCreatedEvent
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from settings import settings
 
 Base.metadata.create_all(bind=engine)
@@ -110,25 +111,25 @@ def create_ics_file(
 
     schedule = None
     if not is_group:
-        if schedule_id != -1:
-            schedule = db.query(ScheduleAnalysis).filter(
-                ScheduleAnalysis.id == schedule_id,
-                ScheduleAnalysis.status == "success"
-            ).first()
 
-            if not schedule:
-                raise HTTPException(status_code=404, detail="일정을 찾을 수 없습니다.")
+        schedule = db.query(ScheduleAnalysis).filter(
+            ScheduleAnalysis.id == schedule_id,
+            ScheduleAnalysis.status == "success"
+        ).first()
+
+        if not schedule:
+            raise HTTPException(status_code=404, detail="일정을 찾을 수 없습니다.")
 
     cal = Calendar()
     cal.add("prodid", "-//KT Auto Scheduler//")
     cal.add("version", "2.0")
 
     event = Event()
-    event.add("summary", schedule.parsedTitle if schedule else "그룹 일정")
-    event.add("dtstart", schedule.parsedStartAt.astimezone(timezone("Asia/Seoul")) if schedule else datetime.now())
-    event.add("dtend", schedule.parsedEndAt.astimezone(timezone("Asia/Seoul")) if schedule else datetime.now())
-    event.add("location", schedule.parsedLocation if schedule else "미정")
-    event.add("description", schedule.emailContent if schedule else "그룹 일정입니다.")
+    event.add("summary", schedule.parsed_title if schedule else "그룹 일정")
+    event.add("dtstart", schedule.parsed_start_at.astimezone(timezone(timedelta(hours=9))))
+    event.add("dtend", schedule.parsed_end_at.astimezone(timezone(timedelta(hours=9))))
+    event.add("location", schedule.parsed_location if schedule else "미정")
+    event.add("description", schedule.email_content if schedule else "그룹 일정입니다.")
     cal.add_component(event)
 
     ics_bytes = cal.to_ical()
@@ -261,6 +262,71 @@ def send_from_db(
     print(f"summary: {summary}")
     return send_ics_email_binary(to_email, subject, message, ics.fileData, summary, ics.filename)
 
+def create_calendar_ics_file(event: CalendarSubscriptionCreatedEvent, db: Session):
+    cal = Calendar()
+    cal.add("prodid", "-//KT Auto Scheduler//")
+    cal.add("version", "2.0")
+
+    for schedule in event.schedules:
+        _event = Event()
+        _event.add("summary", schedule.title)
+        _event.add("dtstart", schedule.startAt)
+        _event.add("dtend", schedule.endAt)
+        _event.add("location", schedule.location)
+        _event.add("description", schedule.description)
+        cal.add_component(_event)
+
+    ics_bytes = cal.to_ical()
+    filename = f"schedule_{datetime.now().strftime('%Y%m%d_%H%M%S')}.ics"
+
+    ics_file = ICSFileBinary(
+        scheduleId=None,
+        calendarId=event.calendarId,
+        groupId=None,
+        isGroupSchedule=True,
+        filename=filename,
+        fileData=ics_bytes
+    )
+    db.add(ics_file)
+    db.commit()
+    db.refresh(ics_file)
+
+    return {
+        "message": "ICS 파일이 DB에 저장되었습니다.",
+        "ics_file_id": ics_file.id
+    }
+
+def update_calendar_ics_file(event: CalendarSubscriptionCreatedEvent, ics_file_id: int, db: Session):
+    cal = Calendar()
+    cal.add("prodid", "-//KT Auto Scheduler//")
+    cal.add("version", "2.0")
+
+    for schedule in event.schedules:
+        event = Event()
+        event.add("summary", schedule.title)
+        event.add("dtstart", schedule.startAt)
+        event.add("dtend", schedule.endAt)
+        event.add("location", schedule.location)
+        event.add("description", schedule.description)
+        cal.add_component(event)
+
+    ics_bytes = cal.to_ical()
+    filename = f"schedule_{datetime.now().strftime('%Y%m%d_%H%M%S')}.ics"
+
+    ics_file = db.query(ICSFileBinary).filter(ICSFileBinary.id == ics_file_id).first()
+    if not ics_file:
+        raise HTTPException(status_code=404, detail="ICS 파일을 찾을 수 없습니다.")
+
+    ics_file.fileData = ics_bytes
+    ics_file.filename = filename
+    db.commit()
+    db.refresh(ics_file)
+
+    return {
+        "message": "ICS 파일이 DB에 저장되었습니다.",
+        "ics_file_id": ics_file.id
+    }
+
 async def handle_kafka_message(topic: str, payload: dict):
     print(f"📨 메시지 수신: topic={topic}, payload={payload}")
     
@@ -292,21 +358,25 @@ async def handle_kafka_message(topic: str, payload: dict):
                         start_at = datetime.fromisoformat(event.parsedStartAt)
                         end_at = datetime.fromisoformat(event.parsedEndAt)
 
-                        event = ScheduleCreateEvent(
+                        analysis = ScheduleAnalysis(
+                            id = event.email_id,
                             email_id=event.email_id,
-                            title=event.parsedTitle,
-                            description=email.body,
-                            start_at=event.parsedStartAt,
-                            end_at=event.parsedEndAt,
-                            location=event.parsedLocation,
+                            parsed_title=event.parsedTitle,
+                            email_content=email.body,
+                            parsed_start_at=event.parsedStartAt,
+                            parsed_end_at=event.parsedEndAt,
+                            parsed_location=event.parsedLocation,
+                            status="success"
                         )
-                        
+
+                        db.add(analysis)
+                        db.commit()
                         # ics file create
-                        result = create_ics_file(is_group=False, schedule_id=-1, calendar_id=-1, group_id=-1, db=db)
+                        print(f"🔄 ics file db saved: {analysis.id}")
+                        result = create_ics_file(is_group=False, schedule_id=analysis.id, calendar_id=analysis.id, group_id=analysis.id, db=db)
 
-                        print(f"🔄 ics file create: {result}")
-
-                        send_from_db(file_id=result["ics_file_id"], to_email=email.sender_email, subject=event.title, message=email.body, db=db)
+                        print(f"🔄 ics file created: {result}")
+                        send_from_db(file_id=result["ics_file_id"], to_email=email.sender_email, subject=analysis.parsed_title, message=analysis.email_content, db=db)
 
                         print(f"🔄 ics file send: {result}")
 
@@ -326,7 +396,9 @@ async def handle_kafka_message(topic: str, payload: dict):
             print(f"  - 원본 데이터: {payload}")
     elif topic == "calendar.ics.requested":
         try:
-            event = CalendarSubscriptionCreatedEvent(**data)
+            payload = json.loads(payload)
+            print(f"📧 캘린더 구독 요청 수신: {payload}")
+            event = CalendarSubscriptionCreatedEvent(**payload)
 
             print(f"➡️ 처리할 캘린더 ID: {event.calendarId}, 일정 수: {len(event.schedules)}")
 
@@ -338,9 +410,9 @@ async def handle_kafka_message(topic: str, payload: dict):
                 ).order_by(ICSFileBinary.createdAt.desc()).first()
 
                 if ics_file:
-                    update_ics_file(ics_id=ics_file.id, payload=data, db=db)
+                    update_calendar_ics_file(event, ics_file.id, db=db)
                 else:
-                    create_ics_file(is_group=True, calendar_id=event.calendarId, group_id=event.calendarId, db=db)
+                    create_calendar_ics_file(event, db)
 
                 subscription_url = f"{settings.ICS_FILE_SERVICE_URL}/ics/{event.calendarId}.ics"
 

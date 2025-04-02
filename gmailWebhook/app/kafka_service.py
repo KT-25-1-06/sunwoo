@@ -2,7 +2,7 @@ import json
 import asyncio
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from settings import settings
-from app.events import EmailAnalysisRequestEvent, EmailAnalysisResultEvent, ScheduleCreateEvent
+from app.events import CalendarIcsCreatedEvent, EmailAnalysisRequestEvent, EmailAnalysisResultEvent, ScheduleCreateEvent
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,9 @@ class KafkaService:
         print(f"🔄 Kafka Consumer 시작 중... (bootstrap_servers={settings.KAFKA_BOOTSTRAP_SERVERS}, topics={settings.TOPIC_EMAIL_ANALYSIS_RESULT})")
         self.consumer = AIOKafkaConsumer(
             settings.TOPIC_EMAIL_ANALYSIS_RESULT,
+            settings.TOPIC_SCHEDULE_CREATE,
+            settings.TOPIC_CALENDAR_ICS_CREATE,
+            settings.TOPIC_CALENDAR_ICS_DELETE,
             loop=self.loop,
             bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
             group_id="gmail-webhook-service",
@@ -74,6 +77,16 @@ class KafkaService:
         except Exception as e:
             logger.error(f"일정 생성 이벤트 발행 실패: {str(e)}")
             raise
+    
+    async def produce_calendar_ics_created(self, event: CalendarIcsCreatedEvent):
+        await self.producer.send_and_wait(
+            settings.TOPIC_CALENDAR_ICS_CREATED,
+            json.dumps({
+                "calendarId": event.calendarId,
+                "subscriptionUrl": event.subscriptionUrl
+            })
+        )
+        logger.info(f"캘린더 ICS 생성 이벤트 발행 완료: {event.dict()}")
 
     async def consume_events(self, handler):
         print("🔄 Kafka 메시지 수신 대기 중...")

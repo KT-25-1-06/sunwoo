@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -9,6 +10,10 @@ from app.models import ICSFileBinary
 from app.scheduler import check_gmail
 from email_reader import get_ics_summary
 from email_sender import send_ics_email_binary
+
+from app.kafka_service import kafka_service
+from app.events import CalendarIcsCreatedEvent
+
 
 app = FastAPI()
 
@@ -50,3 +55,37 @@ def send_from_db(
     summary = get_ics_summary(file_id, db)
     # TODO: Replace with Kafka message publish to trigger email sending
     return send_ics_email_binary(to_email, subject, message, ics.fileData, summary, ics.filename)
+
+
+@app.on_event("startup")
+async def startup():
+    scheduler.start()
+    await kafka_service.start()
+    asyncio.create_task(kafka_service.consume_events(handle_kafka_message))
+
+@app.on_event("shutdown")
+async def shutdown():
+    scheduler.shutdown()
+    await kafka_service.stop()
+
+async def handle_kafka_message(topic: str, payload: dict):
+    # TODO: Implement Kafka message handling
+    # if topic == "calendar_ics_created":
+    #     event = CalendarIcsCreatedEvent(**payload)
+    #     file_id = event.file_id
+    #     to_email = event.to_email
+    #     subject = event.subject
+    #     message = event.message
+
+    #     db = SessionLocal()
+    #     try:
+    #         ics = db.query(ICSFileBinary).filter(ICSFileBinary.id == file_id).first()
+    #         if not ics:
+    #             print("해당 파일이 존재하지 않습니다.")
+    #             return
+
+    #         summary = get_ics_summary(file_id, db)
+    #         send_ics_email_binary(to_email, subject, message, ics.fileData, summary, ics.filename)
+    #     finally:
+    #         db.close()
+    pass

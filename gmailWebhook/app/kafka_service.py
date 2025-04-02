@@ -2,7 +2,10 @@ import json
 import asyncio
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from settings import settings
-from app.events import EmailAnalysisRequestEvent, EmailAnalysisResultEvent
+from app.events import EmailAnalysisRequestEvent, EmailAnalysisResultEvent, ScheduleCreateEvent
+import logging
+
+logger = logging.getLogger(__name__)
 
 class KafkaService:
     def __init__(self):
@@ -42,15 +45,16 @@ class KafkaService:
         
         # 구독 중인 토픽 확인
         topics = self.consumer.assignment()
-        print(f"📋 구독 중인 토픽: {topics}")
+        if topics:
+            print(f"📋 구독 중인 토픽: {topics}")
+        else:
+            print("⚠️ 구독 중인 토픽이 없습니다.")
 
     async def stop(self):
         if self.producer:
             await self.producer.stop()
-            print("✅ Kafka Producer 종료 완료")
         if self.consumer:
             await self.consumer.stop()
-            print("✅ Kafka Consumer 종료 완료")
 
     async def produce_email_analysis_request(self, event: EmailAnalysisRequestEvent):
         print(f"📤 이메일 분석 요청 발행: email_id={event.email_id}")
@@ -59,17 +63,26 @@ class KafkaService:
         )
         print(f"✅ 이메일 분석 요청 발행 완료: email_id={event.email_id}")
 
+    async def produce_schedule_create(self, event: ScheduleCreateEvent):
+        """일정 생성 이벤트를 발행합니다."""
+        try:
+            await self.producer.send_and_wait(
+                settings.TOPIC_SCHEDULE_CREATE,
+                event.model_dump_json().encode('utf-8')
+            )
+            logger.info(f"일정 생성 이벤트 발행 완료: {event.model_dump_json()}")
+        except Exception as e:
+            logger.error(f"일정 생성 이벤트 발행 실패: {str(e)}")
+            raise
+
     async def consume_events(self, handler):
         print("🔄 Kafka 메시지 수신 대기 중...")
         try:
-            async for msg in self.consumer:
-                print(f"📨 메시지 수신: topic={msg.topic}, partition={msg.partition}, offset={msg.offset}, value={msg.value}")
-                await handler(msg.topic, msg.value)
+            async for message in self.consumer:
+                print(f"📨 메시지 수신: topic={message.topic}, partition={message.partition}, offset={message.offset}, value={message.value}")
+                await handler(message.topic, message.value)
         except Exception as e:
-            print(f"❌ Kafka 메시지 수신 중 오류 발생: {str(e)}")
-            # 오류 발생 시 다시 시도
-            print("🔄 Kafka 메시지 수신 재시도 중...")
-            await asyncio.sleep(5)
-            await self.consume_events(handler)
+            print(f"❌ Kafka 메시지 수신 중 오류: {str(e)}")
+            raise e
 
 kafka_service = KafkaService()

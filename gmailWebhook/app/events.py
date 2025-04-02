@@ -20,3 +20,13 @@ class EmailAnalysisResultEvent(BaseModel):
     parsedLocation: str
     status: str
     failureReason: Optional[str] = None
+
+class ScheduleCreateEvent(BaseModel):
+    email_id: int
+    title: str
+    description: Optional[str] = None
+    start_at: str
+    end_at: str
+    location: Optional[str] = None
+    status: str = "UPCOMING"
+    repeat_type: str = "NONE"
